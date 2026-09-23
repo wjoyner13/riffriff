@@ -1000,7 +1000,7 @@ function Lobby({ room, players, hostId, meId, isHost, myName, level, setLevel, o
     const url = link.toString();
     const who = myName || 'A friend';
     try {
-      if (navigator.share) await navigator.share({ title: 'RIFF/GOD', text: `${who} invited you to race on RIFF/GOD`, url });
+      if (navigator.share) await navigator.share({ title: 'RIFF/GOD', text: `${who} has challenged you to a round of Riff God`, url });
       else {
         await navigator.clipboard.writeText(url);
         setCopied(true);
