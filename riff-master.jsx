@@ -63,12 +63,14 @@ function makePads(count) {
 }
 
 // Levels 3–4 are played sideways: half the pads on each side of the screen.
+// start: how many notes round 1's riff has; each round adds one more.
 const LEVELS = {
-  1: { name: 'Rookie', blurb: '4 pads', pads: 4, tempo: 'normal' },
-  2: { name: 'Riffer', blurb: '4 pads, faster riff', pads: 4, tempo: 'fast' },
-  3: { name: 'Shredder', blurb: '8 pads, phone sideways', pads: 8, tempo: 'normal', landscape: true, rows: 2 },
-  4: { name: 'Riff God', blurb: '12 pads, phone sideways', pads: 12, tempo: 'normal', landscape: true, rows: 3 },
+  1: { name: 'Rookie', blurb: '4 pads', pads: 4, tempo: 'normal', start: 1 },
+  2: { name: 'Riffer', blurb: '4 pads, faster riff', pads: 4, tempo: 'fast', start: 1 },
+  3: { name: 'Shredder', blurb: '8 pads, phone sideways', pads: 8, tempo: 'normal', start: 3, landscape: true, rows: 2 },
+  4: { name: 'Riff God', blurb: '12 pads, phone sideways', pads: 12, tempo: 'normal', start: 4, landscape: true, rows: 3 },
 };
+const riffLength = (level, round) => LEVELS[level].start + round - 1;
 const PADS_BY_LEVEL = Object.fromEntries(Object.entries(LEVELS).map(([lvl, l]) => [lvl, makePads(l.pads)]));
 const toLevel = (value) => (LEVELS[value] ? Number(value) : 1);
 
@@ -125,6 +127,7 @@ const DEMO_CONFIG = { friends: 3, skill: 'normal', rounds: ROUNDS, level: 1 };
 function planBotRace(skill, rounds, level) {
   const s = SKILLS[skill] || SKILLS.normal;
   const { tempo, pads } = LEVELS[level];
+  const len = (r) => riffLength(level, r);
   // More pads means more hunting for the right one.
   const reach = 1 + (pads - 4) * 0.04;
   // Each friend gets their own pace so a same-skill pack doesn't finish in lockstep.
@@ -134,15 +137,15 @@ function planBotRace(skill, rounds, level) {
   let t = 3 * COUNTDOWN_STEP_MS;
   for (let r = 1; r <= rounds; r++) {
     for (;;) {
-      t += 500 + r * (noteMsForRound(r, tempo) + 140); // watching the riff
+      t += 500 + len(r) * (noteMsForRound(len(r), tempo) + 140); // watching the riff
       if (Math.random() < s.slip + s.slipPerRound * r) {
         // Fumbles partway through, buzzes, then hears the riff again.
-        t += jitter(s.reactMs) + jitter(s.tapMs) * Math.floor(Math.random() * r);
+        t += jitter(s.reactMs) + jitter(s.tapMs) * Math.floor(Math.random() * len(r));
         events.push({ at: t, msg: { type: 'slip' } });
         t += 900;
         continue;
       }
-      t += jitter(s.reactMs) + jitter(s.tapMs * reach) * (r - 1);
+      t += jitter(s.reactMs) + jitter(s.tapMs * reach) * (len(r) - 1);
       break;
     }
     events.push({
@@ -211,14 +214,22 @@ function saveLevel(level) {
   }
 }
 
+const isPortrait = () => window.matchMedia('(orientation: portrait)').matches;
+
 function usePortrait() {
-  const query = '(orientation: portrait)';
-  const [portrait, setPortrait] = useState(() => window.matchMedia(query).matches);
+  const [portrait, setPortrait] = useState(isPortrait);
   useEffect(() => {
-    const mq = window.matchMedia(query);
-    const onChange = () => setPortrait(mq.matches);
+    const mq = window.matchMedia('(orientation: portrait)');
+    const onChange = () => setPortrait(isPortrait());
     mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    // Some mobile browsers are unreliable about the media-query event on rotate.
+    window.addEventListener('resize', onChange);
+    // Catch a rotation that happened before this listener was attached.
+    onChange();
+    return () => {
+      mq.removeEventListener('change', onChange);
+      window.removeEventListener('resize', onChange);
+    };
   }, []);
   return portrait;
 }
@@ -263,6 +274,12 @@ export default function RiffMaster({ demoMode = false }) {
   const synth = useSynth();
   const [me] = useState(() => ({ id: crypto.randomUUID(), joinedAt: Date.now() }));
   const [name, setName] = useState(loadName);
+  // Opened from an invite link: ?room=CODE&from=Name
+  const [invite, setInvite] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('room')?.toUpperCase() || '';
+    return code.length === 4 ? { room: code, from: params.get('from')?.trim().slice(0, 16) || '' } : null;
+  });
   const [codeInput, setCodeInput] = useState(
     () => new URLSearchParams(window.location.search).get('room')?.toUpperCase() || ''
   );
@@ -279,8 +296,6 @@ export default function RiffMaster({ demoMode = false }) {
   const [gameLevel, setGameLevel] = useState(1);
   const [roomLevel, setRoomLevel] = useState(null); // what a guest sees the host has picked
   const portrait = usePortrait();
-  const portraitRef = useRef(portrait);
-  portraitRef.current = portrait;
   const [newBest, setNewBest] = useState(false);
   const [error, setError] = useState('');
   const [players, setPlayers] = useState([]);
@@ -341,10 +356,11 @@ export default function RiffMaster({ demoMode = false }) {
     g.idx = 0;
     setRound(g.round);
     setStatus('watch');
-    const noteMs = noteMsForRound(g.round, g.tempo);
+    const len = riffLength(g.level, g.round);
+    const noteMs = noteMsForRound(len, g.tempo);
 
     await sleep(500);
-    for (let i = 0; i < g.round; i++) {
+    for (let i = 0; i < len; i++) {
       if (token !== g.token) return;
       flash(g.seq[i], noteMs);
       await sleep(noteMs + 140);
@@ -370,7 +386,7 @@ export default function RiffMaster({ demoMode = false }) {
         const raceLevel = toLevel(msg.level);
         const pads = PADS_BY_LEVEL[raceLevel];
         Object.assign(g, {
-          seq: makeSequence(msg.seed, raceRounds, pads.length),
+          seq: makeSequence(msg.seed, riffLength(raceLevel, raceRounds), pads.length),
           rounds: raceRounds,
           tempo: LEVELS[raceLevel].tempo,
           level: raceLevel,
@@ -396,7 +412,8 @@ export default function RiffMaster({ demoMode = false }) {
         (async () => {
           // Sideways levels wait for the phone to turn before counting down. Each
           // phone times its own run, so a slow rotate doesn't cost anyone the race.
-          while (LEVELS[raceLevel].landscape && portraitRef.current) {
+          // Reads the screen directly rather than React state, so it can't go stale.
+          while (LEVELS[raceLevel].landscape && isPortrait()) {
             if (token !== g.token) return;
             await sleep(200);
           }
@@ -506,7 +523,7 @@ export default function RiffMaster({ demoMode = false }) {
       }
 
       g.idx++;
-      if (g.idx < g.round) return;
+      if (g.idx < riffLength(g.level, g.round)) return;
 
       g.accepting = false;
       if (g.round === g.rounds) {
@@ -543,6 +560,8 @@ export default function RiffMaster({ demoMode = false }) {
     setRoom(code);
     const url = new URL(window.location.href);
     url.searchParams.set('room', code);
+    // Whoever this player shares the link with was invited by them, not the original inviter.
+    url.searchParams.delete('from');
     window.history.replaceState(null, '', url);
   };
 
@@ -553,12 +572,14 @@ export default function RiffMaster({ demoMode = false }) {
     resultsTimer.current = null;
     setSolo(false);
     setDemo(null);
+    setInvite(null);
     setRoomLevel(null);
     setRoom(null);
     setPlayers([]);
     setPhase('lobby');
     const url = new URL(window.location.href);
     url.searchParams.delete('room');
+    url.searchParams.delete('from');
     window.history.replaceState(null, '', url);
   };
 
@@ -614,6 +635,30 @@ export default function RiffMaster({ demoMode = false }) {
 
   if (demoMode && !demo) {
     return <DemoHome name={name} setName={setName} onStart={() => startDemo()} />;
+  }
+
+  if (invite && !room && !solo && !demo) {
+    return (
+      <InviteHome
+        from={invite.from}
+        name={name}
+        setName={setName}
+        error={error}
+        onJoin={() => enterRoom(invite.room)}
+        onSolo={() => {
+          // Drop the invite and land on the normal home screen, name kept.
+          setInvite(null);
+          setCodeInput('');
+          setError('');
+          const trimmed = name.trim();
+          if (trimmed) saveName(trimmed);
+          const url = new URL(window.location.href);
+          url.searchParams.delete('room');
+          url.searchParams.delete('from');
+          window.history.replaceState(null, '', url);
+        }}
+      />
+    );
   }
 
   if (!room && !solo && !demo) {
@@ -696,6 +741,7 @@ export default function RiffMaster({ demoMode = false }) {
           hostId={host?.id}
           meId={me.id}
           isHost={isHost}
+          myName={name.trim()}
           level={isHost ? level : roomLevel}
           setLevel={setLevel}
           onStart={() => startGame()}
@@ -771,6 +817,9 @@ function rankPlayers(players, progress, finishes) {
 }
 
 function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, setLevel, onCreate, onJoin }) {
+  // Room options stay tucked away until asked for (or a code/error needs them).
+  const [showFriends, setShowFriends] = useState(Boolean(codeInput));
+  const friendsOpen = showFriends || Boolean(error && !name.trim());
   return (
     <div style={{ ...styles.page, justifyContent: 'center' }}>
       <header style={styles.center}>
@@ -799,6 +848,14 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
           Play solo
         </button>
 
+        {!friendsOpen && (
+          <button type="button" style={styles.linkButton} onClick={() => setShowFriends(true)} aria-expanded={false}>
+            Play against friends
+          </button>
+        )}
+
+        {friendsOpen && (
+          <>
         <div style={styles.divider}>or race friends</div>
 
         <button type="button" style={{ ...styles.secondaryButton, width: '100%' }} onClick={onCreate}>
@@ -826,6 +883,8 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
             Join
           </button>
         </form>
+          </>
+        )}
 
         {error && <p style={styles.error}>{error}</p>}
       </div>
@@ -835,6 +894,59 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
           Test mode: rooms only link tabs in this browser until Supabase is configured.
         </p>
       )}
+    </div>
+  );
+}
+
+function InviteHome({ from, name, setName, error, onJoin, onSolo }) {
+  return (
+    <div style={{ ...styles.page, justifyContent: 'center' }}>
+      <header style={styles.center}>
+        <h1 style={styles.title}>
+          <img src={logoUrl} alt="RIFF/GOD" style={styles.logo} />
+        </h1>
+      </header>
+
+      <div style={styles.center}>
+        <h2 style={styles.inviteHeading}>
+          {from ? (
+            <>
+              <span style={{ color: colors.accent }}>{from}</span> invited you to race
+            </>
+          ) : (
+            "You've been invited to race"
+          )}
+        </h2>
+        <p style={styles.inviteRules}>Listen to the sequences, repeat them and race your friends to see who prevails.</p>
+      </div>
+
+      <form
+        style={styles.card}
+        onSubmit={(e) => {
+          e.preventDefault();
+          onJoin();
+        }}
+      >
+        <label style={styles.label}>
+          Your name
+          <input
+            style={styles.input}
+            value={name}
+            maxLength={16}
+            autoComplete="nickname"
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Jess"
+          />
+        </label>
+        <button type="submit" style={{ ...styles.primaryButton, width: '100%' }}>
+          Join game
+        </button>
+        {error && <p style={styles.error}>{error}</p>}
+      </form>
+
+      <button type="button" style={styles.linkButton} onClick={onSolo}>
+        Play solo instead
+      </button>
     </div>
   );
 }
@@ -877,14 +989,18 @@ function DemoHome({ name, setName, onStart }) {
 // A race needs someone to race: Start stays locked until a friend is in the room.
 const MIN_PLAYERS = 2;
 
-function Lobby({ room, players, hostId, meId, isHost, level, setLevel, onStart }) {
+function Lobby({ room, players, hostId, meId, isHost, myName, level, setLevel, onStart }) {
   const [copied, setCopied] = useState(false);
   const canStart = players.length >= MIN_PLAYERS;
 
   const share = async () => {
-    const url = window.location.href;
+    const link = new URL(window.location.pathname, window.location.origin);
+    link.searchParams.set('room', room);
+    if (myName) link.searchParams.set('from', myName);
+    const url = link.toString();
+    const who = myName || 'A friend';
     try {
-      if (navigator.share) await navigator.share({ title: 'Riff Master', text: `Join my Riff Master room: ${room}`, url });
+      if (navigator.share) await navigator.share({ title: 'RIFF/GOD', text: `${who} invited you to race on RIFF/GOD`, url });
       else {
         await navigator.clipboard.writeText(url);
         setCopied(true);
@@ -1266,6 +1382,8 @@ const styles = {
   noteWide: { fontSize: 13 },
   cardCompact: { width: '100%', padding: '10px 12px', gap: 6, overflowY: 'auto', minHeight: 0 },
   levelTag: { margin: '0 0 4px', color: colors.accent, fontSize: 12, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' },
+  inviteHeading: { margin: '0 0 8px', fontSize: 24, lineHeight: 1.25 },
+  inviteRules: { margin: '0 auto', color: colors.textMuted, fontSize: 15, lineHeight: 1.45, maxWidth: 340 },
   levelBlurb: { fontSize: 13, color: colors.textMuted },
   segmented: { display: 'flex', gap: 6 },
   segment: {
