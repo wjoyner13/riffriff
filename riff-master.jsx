@@ -17,13 +17,60 @@ const colors = {
   danger: '#FF9EB5',
 };
 
-// One pad per note. Notes climb a C-major arpeggio so any sequence sounds musical.
-const PADS = [
-  { id: 'lavender', note: 'C4', freq: 261.63, base: '#DABFFF', lit: '#F6EEFF', ink: '#2C2A4A', key: '1' },
-  { id: 'purple', note: 'E4', freq: 329.63, base: '#907AD6', lit: '#C3B3FF', ink: '#2C2A4A', key: '2' },
-  { id: 'indigo', note: 'G4', freq: 392.0, base: '#4F518C', lit: '#8A8DE0', ink: '#DABFFF', key: '3' },
-  { id: 'sky', note: 'C5', freq: 523.25, base: '#7FDEFF', lit: '#D2F5FF', ink: '#2C2A4A', key: '4' },
+// Pad colors in play order. The first four are the core palette; the rest
+// extend it for the 8- and 12-pad levels while staying distinguishable.
+const PAD_COLORS = [
+  { name: 'lavender', base: '#DABFFF', ink: '#2C2A4A' },
+  { name: 'purple', base: '#907AD6', ink: '#2C2A4A' },
+  { name: 'indigo', base: '#4F518C', ink: '#F4EEFF' },
+  { name: 'sky', base: '#7FDEFF', ink: '#2C2A4A' },
+  { name: 'pink', base: '#F59AC8', ink: '#2C2A4A' },
+  { name: 'peach', base: '#FFC996', ink: '#2C2A4A' },
+  { name: 'mint', base: '#8EF0C6', ink: '#2C2A4A' },
+  { name: 'orchid', base: '#C77DDB', ink: '#2C2A4A' },
+  { name: 'teal', base: '#2F8F9D', ink: '#F4EEFF' },
+  { name: 'periwinkle', base: '#9AA5FF', ink: '#2C2A4A' },
+  { name: 'rose', base: '#C2557A', ink: '#F4EEFF' },
+  { name: 'gold', base: '#F2D16B', ink: '#2C2A4A' },
 ];
+// 4 pads climb a C-major arpeggio; 8 and 12 walk the C-major scale, so any
+// sequence still sounds musical.
+const ARPEGGIO = [['C4', 261.63], ['E4', 329.63], ['G4', 392.0], ['C5', 523.25]];
+const SCALE = [
+  ['C4', 261.63], ['D4', 293.66], ['E4', 329.63], ['F4', 349.23], ['G4', 392.0], ['A4', 440.0],
+  ['B4', 493.88], ['C5', 523.25], ['D5', 587.33], ['E5', 659.25], ['F5', 698.46], ['G5', 783.99],
+];
+const PAD_KEYS = '1234567890-=';
+
+function lighten(hex, amount) {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c) => Math.round(c + (255 - c) * amount);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(mix);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+function makePads(count) {
+  const notes = count === 4 ? ARPEGGIO : SCALE.slice(0, count);
+  return notes.map(([note, freq], i) => ({
+    id: PAD_COLORS[i].name,
+    note,
+    freq,
+    base: PAD_COLORS[i].base,
+    lit: lighten(PAD_COLORS[i].base, 0.55),
+    ink: PAD_COLORS[i].ink,
+    key: PAD_KEYS[i],
+  }));
+}
+
+// Levels 3–4 are played sideways: half the pads on each side of the screen.
+const LEVELS = {
+  1: { name: 'Rookie', blurb: '4 pads', pads: 4, tempo: 'normal' },
+  2: { name: 'Riffer', blurb: '4 pads, faster riff', pads: 4, tempo: 'fast' },
+  3: { name: 'Shredder', blurb: '8 pads, phone sideways', pads: 8, tempo: 'normal', landscape: true, rows: 2 },
+  4: { name: 'Riff God', blurb: '12 pads, phone sideways', pads: 12, tempo: 'normal', landscape: true, rows: 3 },
+};
+const PADS_BY_LEVEL = Object.fromEntries(Object.entries(LEVELS).map(([lvl, l]) => [lvl, makePads(l.pads)]));
+const toLevel = (value) => (LEVELS[value] ? Number(value) : 1);
 
 const ROUNDS = 10; // default race length
 const TEMPOS = {
@@ -42,7 +89,7 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Deterministic PRNG: every phone that gets the same seed builds the same riff.
-function makeSequence(seed, rounds) {
+function makeSequence(seed, rounds, padCount) {
   let a = seed >>> 0;
   const next = () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -51,7 +98,7 @@ function makeSequence(seed, rounds) {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  return Array.from({ length: rounds }, () => Math.floor(next() * PADS.length));
+  return Array.from({ length: rounds }, () => Math.floor(next() * padCount));
 }
 
 // Playback gets brisker as the riff grows.
@@ -70,13 +117,16 @@ const SKILLS = {
   pro: { tapMs: 240, reactMs: 280, slip: 0.01, slipPerRound: 0.006 },
 };
 // Settings for the test-only demo page (riff-demo.html). Edit here to tune.
-// skill: easy | normal | hard | pro — tempo: relaxed | normal | fast
-const DEMO_CONFIG = { friends: 3, skill: 'normal', rounds: ROUNDS, tempo: 'normal' };
+// skill: easy | normal | hard | pro — level: 1–4 (see LEVELS)
+const DEMO_CONFIG = { friends: 3, skill: 'normal', rounds: ROUNDS, level: 1 };
 
 // Plans one bot's whole race up front as timed events, mirroring the real
 // game's pacing: watch the riff, repeat it, maybe slip and redo the round.
-function planBotRace(skill, rounds, tempo) {
+function planBotRace(skill, rounds, level) {
   const s = SKILLS[skill] || SKILLS.normal;
+  const { tempo, pads } = LEVELS[level];
+  // More pads means more hunting for the right one.
+  const reach = 1 + (pads - 4) * 0.04;
   // Each friend gets their own pace so a same-skill pack doesn't finish in lockstep.
   const pace = 0.8 + Math.random() * 0.45;
   const jitter = (ms) => ms * pace * (0.75 + Math.random() * 0.5);
@@ -92,7 +142,7 @@ function planBotRace(skill, rounds, tempo) {
         t += 900;
         continue;
       }
-      t += jitter(s.reactMs) + jitter(s.tapMs) * (r - 1);
+      t += jitter(s.reactMs) + jitter(s.tapMs * reach) * (r - 1);
       break;
     }
     events.push({
@@ -124,20 +174,53 @@ function saveName(name) {
   }
 }
 
-function loadBest() {
+// Level 1 keeps the original key so earlier personal bests carry over.
+const bestKey = (level) => (level === 1 ? 'riff:best' : `riff:best:${level}`);
+
+function loadBests() {
   try {
-    return Number(localStorage.getItem('riff:best')) || null;
+    return Object.fromEntries(
+      Object.keys(LEVELS).map((lvl) => [lvl, Number(localStorage.getItem(bestKey(Number(lvl)))) || null])
+    );
   } catch {
-    return null;
+    return {};
   }
 }
 
-function saveBest(ms) {
+function saveBest(level, ms) {
   try {
-    localStorage.setItem('riff:best', String(ms));
+    localStorage.setItem(bestKey(level), String(ms));
   } catch {
     // Best time just won't survive a reload.
   }
+}
+
+function loadLevel() {
+  try {
+    return toLevel(localStorage.getItem('riff:level'));
+  } catch {
+    return 1;
+  }
+}
+
+function saveLevel(level) {
+  try {
+    localStorage.setItem('riff:level', String(level));
+  } catch {
+    // Level choice just resets next visit.
+  }
+}
+
+function usePortrait() {
+  const query = '(orientation: portrait)';
+  const [portrait, setPortrait] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const onChange = () => setPortrait(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return portrait;
 }
 
 function formatMs(ms) {
@@ -189,7 +272,15 @@ export default function RiffMaster({ demoMode = false }) {
   const [rounds, setRounds] = useState(ROUNDS);
   const [slips, setSlips] = useState({}); // id -> timestamp of their latest wrong note
   // Solo personal best, plus whether the run that just ended beat it.
-  const [best, setBest] = useState(loadBest);
+  const [bests, setBests] = useState(loadBests);
+  // level: this player's pick on the home screen (and the host's pick for a room).
+  // gameLevel: the level of the race actually being played, from the start message.
+  const [level, setLevelState] = useState(loadLevel);
+  const [gameLevel, setGameLevel] = useState(1);
+  const [roomLevel, setRoomLevel] = useState(null); // what a guest sees the host has picked
+  const portrait = usePortrait();
+  const portraitRef = useRef(portrait);
+  portraitRef.current = portrait;
   const [newBest, setNewBest] = useState(false);
   const [error, setError] = useState('');
   const [players, setPlayers] = useState([]);
@@ -210,6 +301,8 @@ export default function RiffMaster({ demoMode = false }) {
     round: 1,
     rounds: ROUNDS,
     tempo: 'normal',
+    level: 1,
+    pads: PADS_BY_LEVEL[1],
     idx: 0,
     accepting: false,
     startedAt: 0,
@@ -224,7 +317,7 @@ export default function RiffMaster({ demoMode = false }) {
 
   const flash = useCallback(
     (index, ms = TAP_MS) => {
-      const pad = PADS[index];
+      const pad = game.current.pads[index];
       synth(pad.freq, Math.max(ms, 300));
       clearTimeout(litTimers.current[pad.id]);
       setLit((prev) => ({ ...prev, [pad.id]: true }));
@@ -274,13 +367,18 @@ export default function RiffMaster({ demoMode = false }) {
         const g = game.current;
         const token = g.token;
         const raceRounds = msg.rounds || ROUNDS;
+        const raceLevel = toLevel(msg.level);
+        const pads = PADS_BY_LEVEL[raceLevel];
         Object.assign(g, {
-          seq: makeSequence(msg.seed, raceRounds),
+          seq: makeSequence(msg.seed, raceRounds, pads.length),
           rounds: raceRounds,
-          tempo: msg.tempo || 'normal',
+          tempo: LEVELS[raceLevel].tempo,
+          level: raceLevel,
+          pads,
           round: 1,
           idx: 0,
         });
+        setGameLevel(raceLevel);
         setProgress({});
         setFinishes({});
         setSlips({});
@@ -289,13 +387,19 @@ export default function RiffMaster({ demoMode = false }) {
         if (demo) {
           // Bot events replay through this same handler, just like a friend's messages.
           for (const bot of players.filter((p) => p.bot)) {
-            for (const { at, msg: botMsg } of planBotRace(demo.skill, raceRounds, g.tempo)) {
+            for (const { at, msg: botMsg } of planBotRace(demo.skill, raceRounds, raceLevel)) {
               botTimers.current.push(setTimeout(() => handleRef.current({ ...botMsg, id: bot.id }), at));
             }
           }
         }
         setPhase('countdown');
         (async () => {
+          // Sideways levels wait for the phone to turn before counting down. Each
+          // phone times its own run, so a slow rotate doesn't cost anyone the race.
+          while (LEVELS[raceLevel].landscape && portraitRef.current) {
+            if (token !== g.token) return;
+            await sleep(200);
+          }
           for (let n = 3; n > 0; n--) {
             if (token !== g.token) return;
             setCountdown(n);
@@ -308,6 +412,8 @@ export default function RiffMaster({ demoMode = false }) {
           setPhase('playing');
           playRound();
         })();
+      } else if (msg.type === 'level') {
+        setRoomLevel(toLevel(msg.level));
       } else if (msg.type === 'progress') {
         setProgress((p) => ({ ...p, [msg.id]: Math.max(p[msg.id] || 0, msg.cleared) }));
       } else if (msg.type === 'slip') {
@@ -316,10 +422,12 @@ export default function RiffMaster({ demoMode = false }) {
         setProgress((p) => ({ ...p, [msg.id]: game.current.rounds }));
         setFinishes((f) => ({ ...f, [msg.id]: msg.ms }));
         if (solo) {
-          const beat = best == null || msg.ms < best;
+          const lvl = game.current.level;
+          const prev = bests[lvl];
+          const beat = prev == null || msg.ms < prev;
           if (beat) {
-            setBest(msg.ms);
-            saveBest(msg.ms);
+            setBests((b) => ({ ...b, [lvl]: msg.ms }));
+            saveBest(lvl, msg.ms);
           }
           setNewBest(beat);
         }
@@ -335,7 +443,7 @@ export default function RiffMaster({ demoMode = false }) {
         }
       }
     },
-    [playRound, stopGame, solo, best, demo, players]
+    [playRound, stopGame, solo, bests, demo, players]
   );
 
   const handleRef = useRef(handleMessage);
@@ -418,7 +526,7 @@ export default function RiffMaster({ demoMode = false }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.repeat || e.target.tagName === 'INPUT') return;
-      const index = PADS.findIndex((p) => p.key === e.key);
+      const index = game.current.pads.findIndex((p) => p.key === e.key);
       if (index >= 0) onPad(index);
     };
     window.addEventListener('keydown', onKey);
@@ -445,6 +553,7 @@ export default function RiffMaster({ demoMode = false }) {
     resultsTimer.current = null;
     setSolo(false);
     setDemo(null);
+    setRoomLevel(null);
     setRoom(null);
     setPlayers([]);
     setPhase('lobby');
@@ -453,13 +562,24 @@ export default function RiffMaster({ demoMode = false }) {
     window.history.replaceState(null, '', url);
   };
 
+  const setLevel = (next) => {
+    setLevelState(next);
+    saveLevel(next);
+  };
+
   const startGame = (config = demo) =>
     send({
       type: 'start',
       seed: Math.floor(Math.random() * 2 ** 32),
       rounds: config?.rounds || ROUNDS,
-      tempo: config?.tempo || 'normal',
+      level: config?.level ?? level,
     });
+
+  // The host keeps guests' lobbies in sync with the level they've picked,
+  // including anyone who joins after the pick.
+  useEffect(() => {
+    if (room && isHost && phase === 'lobby') connRef.current?.send({ type: 'level', level });
+  }, [room, isHost, phase, level, players.length]);
 
   // Demo race: you plus simulated friends, all local, using DEMO_CONFIG.
   const startDemo = (settings = DEMO_CONFIG) => {
@@ -505,6 +625,8 @@ export default function RiffMaster({ demoMode = false }) {
         setCodeInput={setCodeInput}
         error={error}
         onSolo={startSolo}
+        level={level}
+        setLevel={setLevel}
         onCreate={() => enterRoom(randomCode())}
         onJoin={() => {
           const code = codeInput.trim().toUpperCase();
@@ -516,6 +638,45 @@ export default function RiffMaster({ demoMode = false }) {
   }
 
   const standings = rankPlayers(players, progress, finishes);
+  const lvl = LEVELS[gameLevel];
+  const best = bests[gameLevel];
+  const needsRotate = lvl.landscape && portrait && (phase === 'countdown' || phase === 'playing');
+
+  if (needsRotate) {
+    return <RotatePrompt level={gameLevel} onLeave={leaveRoom} />;
+  }
+
+  if (phase === 'playing' && lvl.landscape) {
+    const pads = PADS_BY_LEVEL[gameLevel];
+    const half = pads.length / 2;
+    return (
+      <div style={styles.wide}>
+        <PadGrid pads={pads.slice(0, half)} offset={0} rows={lvl.rows} lit={lit} disabled={status !== 'repeat'} onPad={onPad} />
+        <div style={styles.wideMiddle}>
+          <div style={styles.wideTop}>
+            <button type="button" style={styles.linkButton} onClick={leaveRoom}>
+              ← Leave
+            </button>
+            <span style={styles.roomTag}>{solo ? 'Solo' : demo ? 'Demo race' : `Room ${room}`}</span>
+          </div>
+          <div style={styles.wideMessage}>
+            <p style={styles.levelTag}>
+              Level {gameLevel} · {lvl.name}
+            </p>
+            <p style={styles.roundLabel}>
+              Round {round} / {rounds}
+            </p>
+            <p style={{ ...styles.statusLine, color: status === 'wrong' ? colors.danger : colors.textMuted }}>
+              {STATUS_COPY[status]}
+            </p>
+            {solo && best != null && <p style={{ ...styles.hint, marginTop: 6 }}>Best: {formatMs(best)}</p>}
+          </div>
+          {!solo && <Scoreboard standings={standings} meId={me.id} rounds={rounds} slips={slips} compact />}
+        </div>
+        <PadGrid pads={pads.slice(half)} offset={half} rows={lvl.rows} lit={lit} disabled={status !== 'repeat'} onPad={onPad} />
+      </div>
+    );
+  }
 
   return (
     <div style={styles.page}>
@@ -535,12 +696,17 @@ export default function RiffMaster({ demoMode = false }) {
           hostId={host?.id}
           meId={me.id}
           isHost={isHost}
+          level={isHost ? level : roomLevel}
+          setLevel={setLevel}
           onStart={() => startGame()}
         />
       )}
 
       {phase === 'countdown' && (
         <div style={styles.center}>
+          <p style={styles.levelTag}>
+            Level {gameLevel} · {lvl.name}
+          </p>
           <p style={styles.subtitle}>{solo ? `Clear all ${rounds} rounds` : `First to clear round ${rounds} wins`}</p>
           <div style={styles.countdown}>{countdown}</div>
         </div>
@@ -553,6 +719,9 @@ export default function RiffMaster({ demoMode = false }) {
       {phase === 'playing' && (
         <>
           <div style={styles.center}>
+            <p style={styles.levelTag}>
+              Level {gameLevel} · {lvl.name}
+            </p>
             <p style={styles.roundLabel}>
               Round {round} / {rounds}
             </p>
@@ -560,7 +729,7 @@ export default function RiffMaster({ demoMode = false }) {
               {STATUS_COPY[status]}
             </p>
           </div>
-          <PadGrid lit={lit} disabled={status !== 'repeat'} onPad={onPad} />
+          <PadGrid pads={PADS_BY_LEVEL[gameLevel]} lit={lit} disabled={status !== 'repeat'} onPad={onPad} />
           {!solo && <Scoreboard standings={standings} meId={me.id} rounds={rounds} slips={slips} />}
         </>
       )}
@@ -601,7 +770,7 @@ function rankPlayers(players, progress, finishes) {
     });
 }
 
-function Home({ name, setName, codeInput, setCodeInput, error, onSolo, onCreate, onJoin }) {
+function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, setLevel, onCreate, onJoin }) {
   return (
     <div style={{ ...styles.page, justifyContent: 'center' }}>
       <header style={styles.center}>
@@ -623,6 +792,8 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, onCreate,
             placeholder="e.g. Jess"
           />
         </label>
+
+        <LevelPicker level={level} setLevel={setLevel} />
 
         <button type="button" style={styles.primaryButton} onClick={onSolo}>
           Play solo
@@ -692,8 +863,8 @@ function DemoHome({ name, setName, onStart }) {
           />
         </label>
         <p style={{ ...styles.hint, textAlign: 'left' }}>
-          {c.friends} simulated {c.friends === 1 ? 'friend' : 'friends'} · {c.skill} skill · first to {c.rounds} rounds ·{' '}
-          {c.tempo} speed
+          {c.friends} simulated {c.friends === 1 ? 'friend' : 'friends'} · {c.skill} skill · first to {c.rounds} rounds ·
+          level {c.level} ({LEVELS[c.level].name})
         </p>
         <button type="button" style={{ ...styles.primaryButton, width: '100%' }} onClick={onStart}>
           Start demo race
@@ -706,7 +877,7 @@ function DemoHome({ name, setName, onStart }) {
 // A race needs someone to race: Start stays locked until a friend is in the room.
 const MIN_PLAYERS = 2;
 
-function Lobby({ room, players, hostId, meId, isHost, onStart }) {
+function Lobby({ room, players, hostId, meId, isHost, level, setLevel, onStart }) {
   const [copied, setCopied] = useState(false);
   const canStart = players.length >= MIN_PLAYERS;
 
@@ -755,6 +926,16 @@ function Lobby({ room, players, hostId, meId, isHost, onStart }) {
         </ul>
       </div>
 
+      <div style={styles.card}>
+        {isHost ? (
+          <LevelPicker level={level} setLevel={setLevel} />
+        ) : (
+          <p style={{ ...styles.label, margin: 0 }}>
+            {level ? `Level ${level} · ${LEVELS[level].name} — ${LEVELS[level].blurb}` : 'The host is picking a level…'}
+          </p>
+        )}
+      </div>
+
       {isHost ? (
         <button
           type="button"
@@ -771,10 +952,75 @@ function Lobby({ room, players, hostId, meId, isHost, onStart }) {
   );
 }
 
-function PadGrid({ lit, disabled, onPad }) {
+function LevelPicker({ level, setLevel }) {
+  const l = LEVELS[level];
   return (
-    <div style={styles.grid}>
-      {PADS.map((pad, index) => (
+    <div style={styles.label}>
+      Level
+      <div style={styles.segmented} role="radiogroup" aria-label="Level">
+        {Object.keys(LEVELS).map((key) => {
+          const n = Number(key);
+          const on = n === level;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={`Level ${n}, ${LEVELS[n].name}`}
+              onClick={() => setLevel(n)}
+              style={{ ...styles.segment, ...(on ? styles.segmentOn : null) }}
+            >
+              {n}
+            </button>
+          );
+        })}
+      </div>
+      <span style={styles.levelBlurb}>
+        <strong style={{ color: colors.text }}>{l.name}</strong> · {l.blurb}
+      </span>
+    </div>
+  );
+}
+
+function RotatePrompt({ level, onLeave }) {
+  return (
+    <div style={{ ...styles.page, justifyContent: 'center' }}>
+      <div style={styles.center}>
+        <div style={styles.rotateIcon} aria-hidden="true">
+          📱↻
+        </div>
+        <h2 style={styles.winner}>Rotate your phone</h2>
+        <p style={styles.subtitle}>
+          Level {level} · {LEVELS[level].name} is played sideways — {LEVELS[level].pads / 2} pads on each side.
+        </p>
+        <p style={{ ...styles.hint, marginTop: 12 }}>The countdown starts once you turn it.</p>
+      </div>
+      <button type="button" style={styles.linkButton} onClick={onLeave}>
+        ← Leave
+      </button>
+    </div>
+  );
+}
+
+// offset: index of this grid's first pad in the level's full pad list.
+// rows: set for the sideways levels, which size pads to fit the screen height.
+function PadGrid({ pads, offset = 0, rows, lit, disabled, onPad }) {
+  const wide = rows != null;
+  const gap = wide ? 10 : 14;
+  // Square pads as big as fits: by height (rows) or by a ~27% slice of width.
+  const size = wide ? `min(calc((100dvh - 32px - ${(rows - 1) * gap}px) / ${rows}), calc((27vw - ${gap}px) / 2))` : null;
+  return (
+    <div
+      style={
+        wide
+          ? { ...styles.gridBase, gap, gridTemplateColumns: `repeat(2, ${size})`, gridAutoRows: size }
+          : styles.grid
+      }
+    >
+      {pads.map((pad, i) => {
+        const index = offset + i;
+        return (
         <button
           key={pad.id}
           type="button"
@@ -791,22 +1037,24 @@ function PadGrid({ lit, disabled, onPad }) {
           }}
           style={{
             ...styles.pad,
+            ...(wide ? styles.padWide : null),
             background: lit[pad.id] ? pad.lit : pad.base,
             boxShadow: lit[pad.id] ? `0 0 36px ${pad.lit}` : 'none',
             transform: lit[pad.id] ? 'scale(0.97)' : 'scale(1)',
             opacity: disabled && !lit[pad.id] ? 0.72 : 1,
           }}
         >
-          <span style={{ ...styles.note, color: pad.ink }}>{pad.note}</span>
+          <span style={{ ...styles.note, ...(wide ? styles.noteWide : null), color: pad.ink }}>{pad.note}</span>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 const SLIP_SHOW_MS = 1100;
 
-function Scoreboard({ standings, meId, rounds, slips }) {
+function Scoreboard({ standings, meId, rounds, slips, compact = false }) {
   // Re-render shortly after a slip so its "oops" tag clears on time.
   const [, tick] = useState(0);
   const latestSlip = Math.max(0, ...Object.values(slips));
@@ -818,7 +1066,7 @@ function Scoreboard({ standings, meId, rounds, slips }) {
   }, [latestSlip]);
 
   return (
-    <ul style={{ ...styles.playerList, ...styles.card, gap: 10 }}>
+    <ul style={{ ...styles.playerList, ...styles.card, gap: 10, ...(compact ? styles.cardCompact : null) }}>
       {standings.map((p) => {
         const slipped = Date.now() - (slips[p.id] || 0) < SLIP_SHOW_MS;
         return (
@@ -977,6 +1225,7 @@ const styles = {
   countdown: { fontSize: 120, fontWeight: 800, color: colors.accent, lineHeight: 1.2 },
   roundLabel: { margin: 0, fontSize: 22, fontWeight: 700 },
   statusLine: { margin: '4px 0 0', fontSize: 15, minHeight: 20 },
+  gridBase: { display: 'grid', userSelect: 'none', WebkitUserSelect: 'none', flexShrink: 0 },
   grid: {
     width: 'min(100%, 420px)',
     aspectRatio: '1',
@@ -986,6 +1235,50 @@ const styles = {
     userSelect: 'none',
     WebkitUserSelect: 'none',
   },
+  wide: {
+    height: '100dvh',
+    boxSizing: 'border-box',
+    padding: '16px max(12px, env(safe-area-inset-right)) 16px max(12px, env(safe-area-inset-left))',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    background: colors.bg,
+    color: colors.text,
+    fontFamily: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+    overflow: 'hidden',
+  },
+  wideMiddle: {
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 360,
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  wideTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  // Takes the free space between the top bar and the scoreboard, so the round
+  // and status sit in the middle of the screen.
+  wideMessage: { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' },
+  padWide: { borderRadius: 14, padding: 8 },
+  noteWide: { fontSize: 13 },
+  cardCompact: { width: '100%', padding: '10px 12px', gap: 6, overflowY: 'auto', minHeight: 0 },
+  levelTag: { margin: '0 0 4px', color: colors.accent, fontSize: 12, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' },
+  levelBlurb: { fontSize: 13, color: colors.textMuted },
+  segmented: { display: 'flex', gap: 6 },
+  segment: {
+    ...button,
+    flex: 1,
+    padding: '10px 4px',
+    fontSize: 15,
+    background: colors.surfaceRaised,
+    color: colors.textMuted,
+    border: `1px solid ${colors.border}`,
+  },
+  segmentOn: { background: colors.accent, color: colors.onAccent, border: `1px solid ${colors.accent}` },
+  rotateIcon: { fontSize: 56, marginBottom: 8, animation: 'riff-pulse 1.6s ease-in-out infinite' },
   pad: {
     // A faint rim keeps the indigo pad visible against the night background.
     border: '1px solid rgba(218,191,255,0.14)',
