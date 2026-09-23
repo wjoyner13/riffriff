@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isOnline, joinRoom } from './src/riffNet.js';
 import logoUrl from './src/assets/riff-logo.png';
+import { t } from './src/copy.js';
 
 // Palette: DABFFF lavender, 907AD6 purple, 4F518C indigo, 2C2A4A night, 7FDEFF sky.
 // The page sits a shade darker than night (1E1C36) so night-colored cards lift off it.
@@ -65,10 +66,10 @@ function makePads(count) {
 // Levels 3–4 are played sideways: half the pads on each side of the screen.
 // start: how many notes round 1's riff has; each round adds one more.
 const LEVELS = {
-  1: { name: 'Rookie', blurb: '4 pads', pads: 4, tempo: 'normal', start: 1 },
-  2: { name: 'Riffer', blurb: '4 pads, faster riff', pads: 4, tempo: 'fast', start: 1 },
-  3: { name: 'Shredder', blurb: '8 pads, phone sideways', pads: 8, tempo: 'normal', start: 3, landscape: true, rows: 2 },
-  4: { name: 'Riff God', blurb: '12 pads, phone sideways', pads: 12, tempo: 'normal', start: 4, landscape: true, rows: 3 },
+  1: { name: t('level.1.name'), blurb: t('level.1.blurb'), pads: 4, tempo: 'normal', start: 1 },
+  2: { name: t('level.2.name'), blurb: t('level.2.blurb'), pads: 4, tempo: 'fast', start: 1 },
+  3: { name: t('level.3.name'), blurb: t('level.3.blurb'), pads: 8, tempo: 'normal', start: 3, landscape: true, rows: 2 },
+  4: { name: t('level.4.name'), blurb: t('level.4.blurb'), pads: 12, tempo: 'normal', start: 4, landscape: true, rows: 3 },
 };
 const riffLength = (level, round) => LEVELS[level].start + round - 1;
 const PADS_BY_LEVEL = Object.fromEntries(Object.entries(LEVELS).map(([lvl, l]) => [lvl, makePads(l.pads)]));
@@ -486,7 +487,7 @@ export default function RiffMaster({ demoMode = false }) {
         if (cancelled) c.leave();
         else connRef.current = c;
       })
-      .catch(() => !cancelled && setError("Couldn't join that room. Try again."));
+      .catch(() => !cancelled && setError(t('error.joinFailed')));
 
     return () => {
       cancelled = true;
@@ -552,7 +553,7 @@ export default function RiffMaster({ demoMode = false }) {
 
   const enterRoom = (code) => {
     const trimmed = name.trim();
-    if (!trimmed) return setError('Enter your name first.');
+    if (!trimmed) return setError(t('error.needName'));
     saveName(trimmed);
     setError('');
     setPlayers([]);
@@ -675,7 +676,7 @@ export default function RiffMaster({ demoMode = false }) {
         onCreate={() => enterRoom(randomCode())}
         onJoin={() => {
           const code = codeInput.trim().toUpperCase();
-          if (code.length !== 4) return setError('Room codes are 4 characters.');
+          if (code.length !== 4) return setError(t('error.codeLength'));
           enterRoom(code);
         }}
       />
@@ -700,21 +701,21 @@ export default function RiffMaster({ demoMode = false }) {
         <div style={styles.wideMiddle}>
           <div style={styles.wideTop}>
             <button type="button" style={styles.linkButton} onClick={leaveRoom}>
-              ← Leave
+              {t('game.leave')}
             </button>
-            <span style={styles.roomTag}>{solo ? 'Solo' : demo ? 'Demo race' : `Room ${room}`}</span>
+            <span style={styles.roomTag}>{solo ? t('game.tagSolo') : demo ? t('game.tagDemo') : t('game.tagRoom', { code: room })}</span>
           </div>
           <div style={styles.wideMessage}>
             <p style={styles.levelTag}>
-              Level {gameLevel} · {lvl.name}
+              {t('game.levelTag', { level: gameLevel, name: lvl.name })}
             </p>
             <p style={styles.roundLabel}>
-              Round {round} / {rounds}
+              {t('game.round', { round, rounds })}
             </p>
             <p style={{ ...styles.statusLine, color: status === 'wrong' ? colors.danger : colors.textMuted }}>
               {STATUS_COPY[status]}
             </p>
-            {solo && best != null && <p style={{ ...styles.hint, marginTop: 6 }}>Best: {formatMs(best)}</p>}
+            {solo && best != null && <p style={{ ...styles.hint, marginTop: 6 }}>{t('game.best', { time: formatMs(best) })}</p>}
           </div>
           {!solo && <Scoreboard standings={standings} meId={me.id} rounds={rounds} slips={slips} compact />}
         </div>
@@ -727,9 +728,9 @@ export default function RiffMaster({ demoMode = false }) {
     <div style={styles.page}>
       <header style={styles.topBar}>
         <button type="button" style={styles.linkButton} onClick={leaveRoom}>
-          ← Leave
+          {t('game.leave')}
         </button>
-        <span style={styles.roomTag}>{solo ? 'Solo' : demo ? 'Demo race' : `Room ${room}`}</span>
+        <span style={styles.roomTag}>{solo ? t('game.tagSolo') : demo ? t('game.tagDemo') : t('game.tagRoom', { code: room })}</span>
       </header>
 
       {error && <p style={styles.error}>{error}</p>}
@@ -751,25 +752,25 @@ export default function RiffMaster({ demoMode = false }) {
       {phase === 'countdown' && (
         <div style={styles.center}>
           <p style={styles.levelTag}>
-            Level {gameLevel} · {lvl.name}
+            {t('game.levelTag', { level: gameLevel, name: lvl.name })}
           </p>
-          <p style={styles.subtitle}>{solo ? `Clear all ${rounds} rounds` : `First to clear round ${rounds} wins`}</p>
+          <p style={styles.subtitle}>{solo ? t('game.goalSolo', { rounds }) : t('game.goalRace', { rounds })}</p>
           <div style={styles.countdown}>{countdown}</div>
         </div>
       )}
 
       {phase === 'playing' && solo && best != null && (
-        <p style={styles.hint}>Best: {formatMs(best)}</p>
+        <p style={styles.hint}>{t('game.best', { time: formatMs(best) })}</p>
       )}
 
       {phase === 'playing' && (
         <>
           <div style={styles.center}>
             <p style={styles.levelTag}>
-              Level {gameLevel} · {lvl.name}
+              {t('game.levelTag', { level: gameLevel, name: lvl.name })}
             </p>
             <p style={styles.roundLabel}>
-              Round {round} / {rounds}
+              {t('game.round', { round, rounds })}
             </p>
             <p style={{ ...styles.statusLine, color: status === 'wrong' ? colors.danger : colors.textMuted }}>
               {STATUS_COPY[status]}
@@ -798,11 +799,11 @@ export default function RiffMaster({ demoMode = false }) {
 }
 
 const STATUS_COPY = {
-  watch: 'Watch the riff…',
-  repeat: 'Your turn — play it back',
-  wrong: 'Wrong note! Try this round again',
-  cleared: 'Nice!',
-  done: 'Finished! Waiting for results…',
+  watch: t('status.watch'),
+  repeat: t('status.repeat'),
+  wrong: t('status.wrong'),
+  cleared: t('status.cleared'),
+  done: t('status.done'),
 };
 
 function rankPlayers(players, progress, finishes) {
@@ -826,40 +827,40 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
         <h1 style={styles.title}>
           <img src={logoUrl} alt="RIFF/GOD" style={styles.logo} />
         </h1>
-        <p style={styles.tagline}>REMEMBER RIFFS AND CHALLENGE FRIENDS</p>
+        <p style={styles.tagline}>{t('home.tagline')}</p>
       </header>
 
       <div style={styles.card}>
         <label style={styles.label}>
-          Your name
+          {t('home.nameLabel')}
           <input
             style={styles.input}
             value={name}
             maxLength={16}
             autoComplete="nickname"
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Jess"
+            placeholder={t('home.namePlaceholder')}
           />
         </label>
 
         <LevelPicker level={level} setLevel={setLevel} />
 
         <button type="button" style={styles.primaryButton} onClick={onSolo}>
-          Play solo
+          {t('home.playSolo')}
         </button>
 
         {!friendsOpen && (
           <button type="button" style={styles.linkButton} onClick={() => setShowFriends(true)} aria-expanded={false}>
-            Play against friends
+            {t('home.playFriends')}
           </button>
         )}
 
         {friendsOpen && (
           <>
-        <div style={styles.divider}>or race friends</div>
+        <div style={styles.divider}>{t('home.friendsDivider')}</div>
 
         <button type="button" style={{ ...styles.secondaryButton, width: '100%' }} onClick={onCreate}>
-          Create a room
+          {t('home.createRoom')}
         </button>
 
         <form
@@ -876,11 +877,11 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
             autoCapitalize="characters"
             autoComplete="off"
             onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-            placeholder="CODE"
+            placeholder={t('home.codePlaceholder')}
             aria-label="Room code"
           />
           <button type="submit" style={styles.secondaryButton}>
-            Join
+            {t('home.join')}
           </button>
         </form>
           </>
@@ -891,10 +892,22 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
 
       {!isOnline && (
         <p style={styles.hint}>
-          Test mode: rooms only link tabs in this browser until Supabase is configured.
+          {t('home.testMode')}
         </p>
       )}
     </div>
+  );
+}
+
+// Highlights the inviter's name wherever {name} sits in the heading copy.
+function InviterHeading({ from }) {
+  const [before, after = ''] = t('invite.heading').split('{name}');
+  return (
+    <>
+      {before}
+      <span style={{ color: colors.accent }}>{from}</span>
+      {after}
+    </>
   );
 }
 
@@ -909,15 +922,9 @@ function InviteHome({ from, name, setName, error, onJoin, onSolo }) {
 
       <div style={styles.center}>
         <h2 style={styles.inviteHeading}>
-          {from ? (
-            <>
-              <span style={{ color: colors.accent }}>{from}</span> invited you to race
-            </>
-          ) : (
-            "You've been invited to race"
-          )}
+          {from ? <InviterHeading from={from} /> : t('invite.headingNoName')}
         </h2>
-        <p style={styles.inviteRules}>Listen to the sequences, repeat them and race your friends to see who prevails.</p>
+        <p style={styles.inviteRules}>{t('invite.rules')}</p>
       </div>
 
       <form
@@ -928,24 +935,24 @@ function InviteHome({ from, name, setName, error, onJoin, onSolo }) {
         }}
       >
         <label style={styles.label}>
-          Your name
+          {t('home.nameLabel')}
           <input
             style={styles.input}
             value={name}
             maxLength={16}
             autoComplete="nickname"
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Jess"
+            placeholder={t('home.namePlaceholder')}
           />
         </label>
         <button type="submit" style={{ ...styles.primaryButton, width: '100%' }}>
-          Join game
+          {t('invite.join')}
         </button>
         {error && <p style={styles.error}>{error}</p>}
       </form>
 
       <button type="button" style={styles.linkButton} onClick={onSolo}>
-        Play solo instead
+        {t('invite.solo')}
       </button>
     </div>
   );
@@ -964,14 +971,14 @@ function DemoHome({ name, setName, onStart }) {
 
       <div style={styles.card}>
         <label style={styles.label}>
-          Your name
+          {t('home.nameLabel')}
           <input
             style={styles.input}
             value={name}
             maxLength={16}
             autoComplete="nickname"
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Jess"
+            placeholder={t('home.namePlaceholder')}
           />
         </label>
         <p style={{ ...styles.hint, textAlign: 'left' }}>
@@ -998,9 +1005,9 @@ function Lobby({ room, players, hostId, meId, isHost, myName, level, setLevel, o
     link.searchParams.set('room', room);
     if (myName) link.searchParams.set('from', myName);
     const url = link.toString();
-    const who = myName || 'A friend';
+    const who = myName || t('share.fallbackName');
     try {
-      if (navigator.share) await navigator.share({ title: 'RIFF/GOD', text: `${who} invited you to race on RIFF/GOD`, url });
+      if (navigator.share) await navigator.share({ title: 'RIFF/GOD', text: t('share.message', { name: who }), url });
       else {
         await navigator.clipboard.writeText(url);
         setCopied(true);
@@ -1014,28 +1021,28 @@ function Lobby({ room, players, hostId, meId, isHost, myName, level, setLevel, o
   return (
     <div style={styles.lobby}>
       <div style={styles.center}>
-        <p style={styles.subtitle}>Room code</p>
+        <p style={styles.subtitle}>{t('lobby.codeLabel')}</p>
         <div style={styles.bigCode}>{room}</div>
         <button type="button" style={styles.linkButton} onClick={share}>
-          {copied ? 'Link copied!' : 'Share invite link'}
+          {copied ? t('lobby.copied') : t('lobby.share')}
         </button>
       </div>
 
       <div style={styles.card}>
-        <p style={styles.label}>Players ({players.length})</p>
+        <p style={styles.label}>{t('lobby.players', { count: players.length })}</p>
         <ul style={styles.playerList}>
           {players.map((p) => (
             <li key={p.id} style={styles.playerRow}>
               <span>
                 {p.name}
-                {p.id === meId && <span style={styles.muted}> (you)</span>}
+                {p.id === meId && <span style={styles.muted}> {t('lobby.you')}</span>}
               </span>
-              {p.id === hostId && <span style={styles.badge}>Host</span>}
+              {p.id === hostId && <span style={styles.badge}>{t('lobby.host')}</span>}
             </li>
           ))}
           {!canStart && (
             <li style={{ ...styles.playerRow, ...styles.muted }}>
-              <span>Waiting for a friend to join…</span>
+              <span>{t('lobby.waitingFriend')}</span>
               <span style={styles.pulse} aria-hidden="true" />
             </li>
           )}
@@ -1047,7 +1054,9 @@ function Lobby({ room, players, hostId, meId, isHost, myName, level, setLevel, o
           <LevelPicker level={level} setLevel={setLevel} />
         ) : (
           <p style={{ ...styles.label, margin: 0 }}>
-            {level ? `Level ${level} · ${LEVELS[level].name} — ${LEVELS[level].blurb}` : 'The host is picking a level…'}
+            {level
+              ? t('lobby.levelShown', { level, name: LEVELS[level].name, blurb: LEVELS[level].blurb })
+              : t('lobby.hostPicking')}
           </p>
         )}
       </div>
@@ -1059,10 +1068,10 @@ function Lobby({ room, players, hostId, meId, isHost, myName, level, setLevel, o
           disabled={!canStart}
           onClick={() => canStart && onStart()}
         >
-          {canStart ? 'Start race' : 'Invite a friend to start'}
+          {canStart ? t('lobby.start') : t('lobby.startLocked')}
         </button>
       ) : (
-        <p style={styles.hint}>Waiting for the host to start…</p>
+        <p style={styles.hint}>{t('lobby.waitingHost')}</p>
       )}
     </div>
   );
@@ -1072,7 +1081,7 @@ function LevelPicker({ level, setLevel }) {
   const l = LEVELS[level];
   return (
     <div style={styles.label}>
-      Level
+      {t('home.levelLabel')}
       <div style={styles.segmented} role="radiogroup" aria-label="Level">
         {Object.keys(LEVELS).map((key) => {
           const n = Number(key);
@@ -1106,14 +1115,14 @@ function RotatePrompt({ level, onLeave }) {
         <div style={styles.rotateIcon} aria-hidden="true">
           📱↻
         </div>
-        <h2 style={styles.winner}>Rotate your phone</h2>
+        <h2 style={styles.winner}>{t('rotate.heading')}</h2>
         <p style={styles.subtitle}>
-          Level {level} · {LEVELS[level].name} is played sideways — {LEVELS[level].pads / 2} pads on each side.
+          {t('rotate.body', { level, name: LEVELS[level].name, perSide: LEVELS[level].pads / 2 })}
         </p>
-        <p style={{ ...styles.hint, marginTop: 12 }}>The countdown starts once you turn it.</p>
+        <p style={{ ...styles.hint, marginTop: 12 }}>{t('rotate.hint')}</p>
       </div>
       <button type="button" style={styles.linkButton} onClick={onLeave}>
-        ← Leave
+        {t('game.leave')}
       </button>
     </div>
   );
@@ -1189,8 +1198,8 @@ function Scoreboard({ standings, meId, rounds, slips, compact = false }) {
           <li key={p.id} style={styles.scoreRow}>
             <span style={styles.scoreName}>
               {p.name}
-              {p.id === meId && <span style={styles.muted}> (you)</span>}
-              {slipped && <span style={styles.slipTag}> oops!</span>}
+              {p.id === meId && <span style={styles.muted}> {t('lobby.you')}</span>}
+              {slipped && <span style={styles.slipTag}> {t('game.oops')}</span>}
             </span>
             <div style={styles.bar}>
               <div
@@ -1215,15 +1224,15 @@ function SoloResults({ ms, best, newBest, onRematch }) {
   return (
     <div style={styles.lobby}>
       <div style={styles.center}>
-        <p style={styles.subtitle}>Riff mastered! 🎸</p>
+        <p style={styles.subtitle}>{t('solo.done')}</p>
         <h2 style={styles.winner}>{formatMs(ms)}</h2>
         <p style={{ ...styles.subtitle, color: newBest ? colors.accent : colors.textMuted }}>
-          {newBest ? 'New personal best!' : `Best: ${formatMs(best)}`}
+          {newBest ? t('solo.newBest') : t('solo.best', { time: formatMs(best) })}
         </p>
       </div>
 
       <button type="button" style={styles.primaryButton} onClick={onRematch}>
-        Play again
+        {t('results.playAgain')}
       </button>
     </div>
   );
@@ -1234,8 +1243,8 @@ function Results({ standings, meId, rounds, isHost, onRematch }) {
   return (
     <div style={styles.lobby}>
       <div style={styles.center}>
-        <p style={styles.subtitle}>Winner</p>
-        <h2 style={styles.winner}>{winner?.id === meId ? 'You win! 🎸' : `${winner?.name} wins!`}</h2>
+        <p style={styles.subtitle}>{t('results.winnerLabel')}</p>
+        <h2 style={styles.winner}>{winner?.id === meId ? t('results.youWin') : t('results.theyWin', { name: winner?.name })}</h2>
       </div>
 
       <ol style={{ ...styles.playerList, ...styles.card, gap: 10 }}>
@@ -1243,19 +1252,19 @@ function Results({ standings, meId, rounds, isHost, onRematch }) {
           <li key={p.id} style={styles.playerRow}>
             <span>
               {i + 1}. {p.name}
-              {p.id === meId && <span style={styles.muted}> (you)</span>}
+              {p.id === meId && <span style={styles.muted}> {t('lobby.you')}</span>}
             </span>
-            <span style={styles.muted}>{p.ms != null ? formatMs(p.ms) : `${p.cleared}/${rounds} rounds`}</span>
+            <span style={styles.muted}>{p.ms != null ? formatMs(p.ms) : t('results.rounds', { cleared: p.cleared, rounds })}</span>
           </li>
         ))}
       </ol>
 
       {isHost ? (
         <button type="button" style={styles.primaryButton} onClick={onRematch}>
-          Play again
+          {t('results.playAgain')}
         </button>
       ) : (
-        <p style={styles.hint}>Waiting for the host to start a rematch…</p>
+        <p style={styles.hint}>{t('results.waitingRematch')}</p>
       )}
     </div>
   );
