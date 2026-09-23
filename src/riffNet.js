@@ -5,6 +5,8 @@
 // Realtime so phones anywhere can play together. Without them we fall back to
 // BroadcastChannel, which only links tabs in the same browser — handy for dev.
 
+import { t } from './copy.js';
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -37,7 +39,7 @@ async function joinSupabase(code, me, { onPlayers, onMessage, onError }) {
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') channel.track(me);
       else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        onError("Couldn't reach the game server. Check your connection and try again.");
+        onError(t('error.serverUnreachable'));
       }
     });
 
