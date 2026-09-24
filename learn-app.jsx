@@ -7,7 +7,6 @@ import { useGuitar } from './src/guitarSynth.js';
 const colors = {
   bgLeft: '#1C1C2C', // rgb(28,28,44)
   bgRight: '#2E2039', // rgb(46,32,57)
-  fade: '#1E1C36', // rgb(30,28,54), the board's right-edge fade
   band: 'rgba(18,18,28,0.66)', // #12121c at 66%
   bandBorder: '#242438',
   text: '#FFFFFF',
@@ -567,7 +566,6 @@ export default function LearnApp() {
 
       <div style={styles.boardRow}>
         <Fretboard chord={displayChord} lit={lit} />
-        <div style={styles.boardFade} aria-hidden="true" />
       </div>
 
       <div style={styles.band}>
@@ -596,6 +594,8 @@ export default function LearnApp() {
   );
 }
 
+const BOARD_MASK = 'linear-gradient(90deg, #000 80%, transparent 98%)';
+const BOARD_GAP = 'clamp(12px, 5dvh, 28px)';
 const font = "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif";
 // The design's background: purple on the right, deep navy on the left.
 const pageBackground = `linear-gradient(-89.45deg, ${colors.bgRight} 5.93%, ${colors.bgLeft} 71.75%)`;
@@ -614,7 +614,7 @@ const styles = {
   },
   introCard: { width: '100%', maxWidth: 440, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 },
   eyebrow: { margin: 0, color: colors.accent, fontSize: 11, fontWeight: 700, letterSpacing: 1.2, textTransform: 'uppercase' },
-  title: { margin: 0, fontFamily: "'Lora', Georgia, serif", fontWeight: 500, fontSize: 28, lineHeight: 1.25, textWrap: 'balance' },
+  title: { margin: 0, fontFamily: font, fontWeight: 700, fontSize: 26, letterSpacing: '-0.01em', lineHeight: 1.25, textWrap: 'balance' },
   body: { margin: 0, color: colors.muted, fontSize: 15, lineHeight: 1.55 },
   startButton: { border: 'none', borderRadius: 10, padding: '13px 30px', fontSize: 16, fontWeight: 700, color: colors.onMarker, background: colors.accent, cursor: 'pointer' },
   linkButton: { border: 'none', background: 'none', color: colors.accent, fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '4px 0' },
@@ -682,23 +682,18 @@ const styles = {
   progressRow: { display: 'inline-flex', gap: 6, flex: 'none' },
   progressSlot: { width: 10, height: 10, borderRadius: '50%', border: '2px solid', transition: 'background 150ms' },
 
-  // Full bleed: the board runs off the right edge, clipped and faded.
+  // Vertical padding shrinks the board and leaves breathing room between it
+  // and the instructions above and the pads below.
   boardRow: {
     position: 'relative',
     overflow: 'hidden',
     minHeight: 0,
-    paddingLeft: 'env(safe-area-inset-left)',
+    padding: `${BOARD_GAP} 0 ${BOARD_GAP} env(safe-area-inset-left)`,
+    // Full bleed: the board runs off the right edge and fades into the page.
+    maskImage: BOARD_MASK,
+    WebkitMaskImage: BOARD_MASK,
   },
   boardSvg: { height: '100%', width: 'auto', aspectRatio: `${FULL_W} / ${BOARD_H}`, display: 'block' },
-  boardFade: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: '18%',
-    background: `linear-gradient(90deg, rgba(30,28,54,0) 0%, ${colors.fade} 73%)`,
-    pointerEvents: 'none',
-  },
   stringLit: { filter: `drop-shadow(0 0 3px ${colors.accent})` },
   marker: { transition: 'fill 120ms' },
   markerGlow: { filter: `drop-shadow(0 0 6px ${colors.accent})` },
@@ -768,7 +763,7 @@ const styles = {
   },
   sheetHandle: { width: 36, height: 4, borderRadius: 999, background: colors.border, margin: '4px auto 10px' },
   sheetHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sheetTitle: { margin: 0, fontFamily: "'Lora', Georgia, serif", fontWeight: 500, fontSize: 20 },
+  sheetTitle: { margin: 0, fontFamily: font, fontWeight: 700, fontSize: 18 },
   sheetGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 },
   sheetCard: {
     background: colors.surfaceRaised,
