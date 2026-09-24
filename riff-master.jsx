@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { isOnline, joinRoom } from './src/riffNet.js';
 import logoUrl from './src/assets/riff-logo.png';
 import { t } from './src/copy.js';
+import { getAudioContext, useAudioUnlock } from './src/audio.js';
 
 // Palette: DABFFF lavender, 907AD6 purple, 4F518C indigo, 2C2A4A night, 7FDEFF sky.
 // The page sits a shade darker than night (1E1C36) so night-colored cards lift off it.
@@ -239,19 +240,15 @@ function formatMs(ms) {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-// The AudioContext must be created (or resumed) inside a user gesture, or
-// iOS Safari keeps it silent — so it's built lazily on the first press.
+// Audio is switched on by the first tap anywhere (see src/audio.js), since
+// phones won't start it later, e.g. when a sequence plays after a delay.
 function useSynth() {
-  const ctxRef = useRef(null);
+  useAudioUnlock();
 
   return useCallback((freq, ms = 450, type = 'triangle') => {
-    if (!ctxRef.current) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      ctxRef.current = new Ctx();
-    }
-    const ctx = ctxRef.current;
-    if (ctx.state === 'suspended') ctx.resume();
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
