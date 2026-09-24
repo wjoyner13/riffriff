@@ -857,7 +857,7 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
 
         {/* A separate ear-training page, not part of the race — plain
             navigation to its own HTML entry point rather than a route. */}
-        <a href="/learn.html" style={{ ...styles.linkButton, display: 'inline-block', textDecoration: 'none' }}>
+        <a href="/learn.html" style={{ ...styles.linkButton, display: 'block', textAlign: 'center', textDecoration: 'none' }}>
           {t('home.guitarMode')}
         </a>
 
