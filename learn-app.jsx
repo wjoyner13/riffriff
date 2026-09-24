@@ -49,6 +49,23 @@ function randomSequence(round) {
 
 const isPortrait = () => window.matchMedia('(orientation: portrait)').matches;
 
+// Best-effort fullscreen, so the game screen isn't sharing space with the
+// browser's own address bar on a phone. Only Chrome/Android-family browsers
+// actually grant this from a tap; iOS Safari silently ignores it (Home
+// Screen install is the real fix there, offered separately). Either way it
+// must be called synchronously from the click handler, or the browser
+// refuses it as not being a direct user gesture.
+function enterFullscreen() {
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+  req?.call(el)?.catch?.(() => {});
+}
+function exitFullscreen() {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) return;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen;
+  exit?.call(document)?.catch?.(() => {});
+}
+
 function usePortrait() {
   const [portrait, setPortrait] = useState(isPortrait);
   useEffect(() => {
@@ -409,6 +426,16 @@ function CheatSheet({ open, onClose }) {
   );
 }
 
+// iOS ignores the Fullscreen API entirely, so the only real way to lose the
+// address bar there is adding the page to the Home Screen. Chrome/Android
+// gets a real fullscreen request instead (wired up where the game starts),
+// so it doesn't need this hint.
+function isIOSBrowserTab() {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  const standalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  return ios && !standalone;
+}
+
 function IntroScreen({ onStart, onOpenCheatSheet }) {
   return (
     <div style={styles.page}>
@@ -425,6 +452,12 @@ function IntroScreen({ onStart, onOpenCheatSheet }) {
         <button type="button" style={styles.linkButton} onClick={onOpenCheatSheet}>
           Chord cheat sheet
         </button>
+        {isIOSBrowserTab() && (
+          <p style={styles.fullscreenHint}>
+            For the most space, add this to your Home Screen: Share <span aria-hidden="true">&#8594;</span> Add to
+            Home Screen.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -538,6 +571,7 @@ export default function LearnApp() {
   }, []);
 
   const startGame = () => {
+    enterFullscreen();
     stopGame();
     const token = game.current.token;
     setAnswered([]);
@@ -569,6 +603,7 @@ export default function LearnApp() {
 
   const backToStart = () => {
     stopGame();
+    exitFullscreen();
     setCheatSheetOpen(false);
     setPhase('intro');
   };
@@ -620,7 +655,13 @@ export default function LearnApp() {
   if (phase === 'intro') {
     return (
       <>
-        <IntroScreen onStart={() => setPhase('practice')} onOpenCheatSheet={() => setCheatSheetOpen(true)} />
+        <IntroScreen
+          onStart={() => {
+            enterFullscreen();
+            setPhase('practice');
+          }}
+          onOpenCheatSheet={() => setCheatSheetOpen(true)}
+        />
         {cheatSheet}
       </>
     );
@@ -744,6 +785,7 @@ const styles = {
   body: { margin: 0, color: colors.muted, fontSize: 15, lineHeight: 1.55 },
   startButton: { border: 'none', borderRadius: 10, padding: '13px 30px', fontSize: 16, fontWeight: 700, color: colors.onMarker, background: colors.accent, cursor: 'pointer' },
   linkButton: { border: 'none', background: 'none', color: colors.accent, fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '4px 0' },
+  fullscreenHint: { margin: '18px 0 0', fontSize: 12, color: colors.muted, lineHeight: 1.5 },
   rotateIcon: { fontSize: 44 },
 
   // Landscape game screen, laid out on the design's 327px-tall grid:
