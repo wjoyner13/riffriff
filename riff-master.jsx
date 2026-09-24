@@ -855,6 +855,12 @@ function Home({ name, setName, codeInput, setCodeInput, error, onSolo, level, se
           </button>
         )}
 
+        {/* A separate ear-training page, not part of the race — plain
+            navigation to its own HTML entry point rather than a route. */}
+        <a href="/learn.html" style={{ ...styles.linkButton, display: 'inline-block', textDecoration: 'none' }}>
+          {t('home.guitarMode')}
+        </a>
+
         {friendsOpen && (
           <>
         <div style={styles.divider}>{t('home.friendsDivider')}</div>

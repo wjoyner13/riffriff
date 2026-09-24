@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         main: 'index.html',
         riffDemo: 'riff-demo.html',
+        learn: 'learn.html',
       },
     },
   },

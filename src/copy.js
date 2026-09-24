@@ -9,6 +9,7 @@ export const COPY = {
   'home.levelLabel': 'Level',
   'home.playSolo': 'Play solo',
   'home.playFriends': 'Play against friends',
+  'home.guitarMode': 'Guitar mode',
   'home.friendsDivider': 'or race friends',
   'home.createRoom': 'Create a room',
   'home.codePlaceholder': 'CODE',

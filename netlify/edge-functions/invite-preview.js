@@ -24,12 +24,26 @@ export function personalise(html, title, description) {
 }
 
 export default async (request, context) => {
-  const params = new URL(request.url).searchParams;
+  const url = new URL(request.url);
+  // Belt-and-suspenders on top of `config.path` below: this must never touch
+  // any page but the root, whatever Netlify's own path matching decides.
+  if (url.pathname !== '/') return context.next();
+
   const response = await context.next();
   // Only invite links get the challenge card; the plain home page keeps its title.
-  if (!params.has('room') || !(response.headers.get('content-type') || '').includes('text/html')) return response;
+  if (!url.searchParams.has('room') || !(response.headers.get('content-type') || '').includes('text/html')) {
+    return response;
+  }
 
-  const html = personalise(await response.text(), challengeTitle(params.get('from')), t('preview.description'));
+  const originalHtml = await response.text();
+  let html = originalHtml;
+  try {
+    // Never let a bug here take down the page — worst case, a shared link
+    // just shows the default title instead of the personalised one.
+    html = personalise(originalHtml, challengeTitle(url.searchParams.get('from')), t('preview.description'));
+  } catch {
+    // html stays as originalHtml
+  }
   const headers = new Headers(response.headers);
   headers.delete('content-length');
   return new Response(html, { status: response.status, headers });
