@@ -246,28 +246,44 @@ function Fretboard({ chord, lit, frets, mini = false }) {
   );
 }
 
-function ChordPads({ flash, disabled, onPick }) {
+function ChordPads({ flash, disabled, answered, onPick }) {
   return (
     <div style={styles.pads}>
       {CHORDS.map((c, i) => {
         const { base, ink } = PAD_COLORS[c.id];
+        // Where this chord sits in the answer so far (1-based), e.g. [1, 3].
+        const picks = answered.flatMap((a, n) => (a === i ? [n + 1] : []));
+        const flashing = flash.index === i;
         return (
           <button
             key={c.id}
             type="button"
             disabled={disabled}
             onClick={() => onPick(i)}
-            aria-label={`${c.name} pad`}
+            aria-label={`${c.name} pad${picks.length ? `, picked ${picks.join(' and ')}` : ''}`}
             style={{
               ...styles.pad,
               background: base,
               color: ink,
-              opacity: disabled ? 0.45 : 1,
-              transform: flash.index === i ? 'scale(0.95)' : 'scale(1)',
-              boxShadow: flash.index === i ? `0 0 0 3px ${flash.good ? colors.good : colors.wrong}` : 'none',
+              opacity: disabled && !picks.length && !flashing ? 0.45 : 1,
+              animation: flashing ? 'pad-pop 380ms ease-out' : 'none',
+              boxShadow: flashing
+                ? `0 0 0 4px ${flash.good ? colors.good : colors.wrong}, 0 0 18px ${flash.good ? colors.good : colors.wrong}`
+                : picks.length
+                  ? `0 0 0 3px ${colors.text}`
+                  : 'none',
             }}
           >
             {c.short}
+            {picks.length > 0 && (
+              <span style={styles.pickBadges} aria-hidden="true">
+                {picks.map((n) => (
+                  <span key={n} style={styles.pickBadge}>
+                    {n}
+                  </span>
+                ))}
+              </span>
+            )}
           </button>
         );
       })}
@@ -275,15 +291,27 @@ function ChordPads({ flash, disabled, onPick }) {
   );
 }
 
-// One dot per chord in the round, filling with that chord's color the moment
-// a correct pick registers.
-function ProgressDots({ total, answered }) {
+const PAD_CSS = `
+@keyframes pad-pop {
+  0% { transform: scale(0.92); }
+  60% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}`;
+
+// One chip per chord in the round. Each fills with the chord's name and color
+// the moment a correct pick registers, so you can see your answer build up.
+function AnswerChips({ total, answered }) {
   return (
     <span style={styles.progressRow} aria-label={`${answered.length} of ${total} chords answered`}>
       {Array.from({ length: total }, (_, i) => {
         const a = answered[i];
-        const color = a != null ? PAD_COLORS[CHORDS[a].id].base : 'transparent';
-        return <span key={i} style={{ ...styles.progressSlot, background: color, borderColor: a != null ? color : colors.muted }} />;
+        if (a == null) return <span key={i} style={styles.chipEmpty} />;
+        const { base, ink } = PAD_COLORS[CHORDS[a].id];
+        return (
+          <span key={i} style={{ ...styles.chip, background: base, color: ink }}>
+            {CHORDS[a].short}
+          </span>
+        );
       })}
     </span>
   );
@@ -489,7 +517,9 @@ export default function LearnApp() {
       if (phase !== 'playing' || !g.accepting) return;
       const correct = g.seq[g.idx] === chordIndex;
       setFlash({ index: chordIndex, good: correct });
-      setTimeout(() => setFlash({ index: -1, good: true }), 220);
+      setTimeout(() => setFlash({ index: -1, good: true }), 450);
+      // Hearing the chord you pressed confirms the tap registered.
+      strum(chordIndex);
 
       if (!correct) {
         g.accepting = false;
@@ -536,7 +566,8 @@ export default function LearnApp() {
   else if (phase === 'countdown') instruction = `Get ready to listen… ${countdown}`;
   else if (phase === 'done' || status === 'done') instruction = 'You identified every chord!';
   else if (status === 'watch') instruction = `Round ${round} of ${ROUNDS} · Listen…`;
-  else if (status === 'guess') instruction = `Round ${round} of ${ROUNDS} · Which chords did you hear?`;
+  else if (status === 'guess')
+    instruction = round > 1 ? `Round ${round} of ${ROUNDS} · Your answer` : `Round ${round} of ${ROUNDS} · Which chord did you hear?`;
   else if (status === 'wrong') instruction = "Not quite, here's the riff again";
   else instruction = 'Got it!';
 
@@ -557,7 +588,7 @@ export default function LearnApp() {
               Start
             </button>
           )}
-          {phase === 'playing' && round > 1 && <ProgressDots total={round} answered={answered} />}
+          {phase === 'playing' && round > 1 && <AnswerChips total={round} answered={answered} />}
         </div>
         <button type="button" style={styles.helpButton} onClick={() => setCheatSheetOpen(true)} aria-label="Chord cheat sheet">
           <HelpIcon />
@@ -569,7 +600,8 @@ export default function LearnApp() {
       </div>
 
       <div style={styles.band}>
-        <ChordPads flash={flash} disabled={padsDisabled} onPick={onPad} />
+        <style>{PAD_CSS}</style>
+        <ChordPads flash={flash} disabled={padsDisabled} answered={phase === 'playing' ? answered : []} onPick={onPad} />
       </div>
 
       {phase === 'done' && (
@@ -679,8 +711,27 @@ const styles = {
     background: colors.accent,
     cursor: 'pointer',
   },
-  progressRow: { display: 'inline-flex', gap: 6, flex: 'none' },
-  progressSlot: { width: 10, height: 10, borderRadius: '50%', border: '2px solid', transition: 'background 150ms' },
+  progressRow: { display: 'inline-flex', gap: 5, flex: 'none' },
+  chip: {
+    minWidth: 30,
+    height: 22,
+    padding: '0 6px',
+    borderRadius: 6,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+    fontWeight: 700,
+    boxSizing: 'border-box',
+  },
+  chipEmpty: {
+    width: 30,
+    height: 22,
+    borderRadius: 6,
+    border: `1.5px dashed ${colors.muted}`,
+    boxSizing: 'border-box',
+    opacity: 0.7,
+  },
 
   // Vertical padding shrinks the board and leaves breathing room between it
   // and the instructions above and the pads below.
@@ -716,7 +767,22 @@ const styles = {
     fontWeight: 700,
     fontFamily: font,
     cursor: 'pointer',
-    transition: 'transform 120ms, box-shadow 120ms, opacity 120ms',
+    position: 'relative',
+    transition: 'box-shadow 150ms, opacity 120ms',
+  },
+  pickBadges: { position: 'absolute', top: 6, right: 6, display: 'flex', gap: 3 },
+  pickBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    background: '#12121C',
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 0 2px #FFFFFF',
   },
 
   modalBackdrop: {
