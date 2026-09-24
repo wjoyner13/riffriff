@@ -84,6 +84,48 @@ const cellMidX = (n) => (wireX(n - 1) + wireX(n)) / 2;
 const SINGLE_INLAYS = [3, 5, 7, 9, 15, 17, 19, 21];
 const DOUBLE_INLAYS = [12, 24];
 
+// String thickness in design px, low E to high e.
+const STRING_GAUGE = [3.2, 2.7, 2.3, 1.9, 1.5, 1.2];
+const WOUND_STRINGS = 3; // low E, A and D are wound
+
+// A quick radial ripple from a finger position as its string sounds. Two rings
+// spread out and fade; they mount when the string lights, so each strum
+// replays them.
+const RIPPLE_CSS = `
+@keyframes fret-ripple {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(3.2); opacity: 0; }
+}
+.fret-ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: fret-ripple 650ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fret-ripple { animation: none; opacity: 0; }
+}`;
+
+function Ripple({ x, y, r, color }) {
+  return (
+    <g pointerEvents="none">
+      {[0, 140].map((delay) => (
+        <circle
+          key={delay}
+          className="fret-ripple"
+          cx={x}
+          cy={y}
+          r={r}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          vectorEffect="non-scaling-stroke"
+          style={{ animationDelay: `${delay}ms`, opacity: 0 }}
+        />
+      ))}
+    </g>
+  );
+}
+
 function Fretboard({ chord, lit, frets, mini = false }) {
   const width = frets ? wireX(frets) + 2 : FULL_W;
   const wireCount = Math.floor((width - BOARD_X) / FRET_GAP);
@@ -101,7 +143,26 @@ function Fretboard({ chord, lit, frets, mini = false }) {
           <stop offset="0%" stopColor={colors.boardFrom} />
           <stop offset="100%" stopColor={colors.boardTo} />
         </linearGradient>
+        {/* Strings are shaded across their thickness, dark edges to a bright
+            core, so they read as round metal wire (Figma node 41:220). */}
+        <linearGradient id={`${gradId}-string`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#6E695C" />
+          <stop offset="38%" stopColor="#FFFDF4" />
+          <stop offset="62%" stopColor={colors.string} />
+          <stop offset="100%" stopColor="#57534A" />
+        </linearGradient>
+        <linearGradient id={`${gradId}-string-lit`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#2F7F9C" />
+          <stop offset="38%" stopColor="#E6F9FF" />
+          <stop offset="62%" stopColor={colors.accent} />
+          <stop offset="100%" stopColor="#276A83" />
+        </linearGradient>
+        {/* The wound bass strings get fine diagonal windings on top. */}
+        <pattern id={`${gradId}-winding`} width={2.4} height={4} patternUnits="userSpaceOnUse" patternTransform="skewX(-35)">
+          <rect width={0.8} height={4} fill="#000" opacity={0.2} />
+        </pattern>
       </defs>
+      {!mini && <style>{RIPPLE_CSS}</style>}
 
       <rect x={BOARD_X} y={0} width={width - BOARD_X} height={BOARD_H} fill={`url(#${gradId})`} />
 
@@ -119,18 +180,25 @@ function Fretboard({ chord, lit, frets, mini = false }) {
         </g>
       ))}
 
-      {STRING_Y.map((y, i) => (
-        <line
-          key={i}
-          x1={BOARD_X}
-          y1={y}
-          x2={width}
-          y2={y}
-          stroke={lit.has(i) ? colors.accent : colors.string}
-          strokeWidth={(1 + (5 - i) * 0.25) * (lit.has(i) ? 1.8 : 1)}
-          style={styles.stringLine}
-        />
-      ))}
+      {STRING_Y.map((y, i) => {
+        const on = lit.has(i);
+        const h = STRING_GAUGE[i] * (on ? 1.5 : 1);
+        return (
+          <g key={i}>
+            <rect
+              x={BOARD_X}
+              y={y - h / 2}
+              width={width - BOARD_X}
+              height={h}
+              fill={`url(#${gradId}-string${on ? '-lit' : ''})`}
+              style={on ? styles.stringLit : undefined}
+            />
+            {i < WOUND_STRINGS && (
+              <rect x={BOARD_X} y={y - h / 2} width={width - BOARD_X} height={h} fill={`url(#${gradId}-winding)`} />
+            )}
+          </g>
+        );
+      })}
 
       <rect x={NUT_X} y={0} width={NUT_W} height={BOARD_H} fill={colors.nut} />
 
@@ -148,22 +216,25 @@ function Fretboard({ chord, lit, frets, mini = false }) {
         }
         if (s.fret === 0) {
           return (
-            <circle
-              key={i}
-              cx={OPEN_X}
-              cy={y}
-              r={7.35}
-              fill={glow ? color : 'none'}
-              stroke={s.root ? colors.accent : colors.iconRing}
-              strokeWidth={2}
-              style={styles.marker}
-            />
+            <g key={i}>
+              {glow && <Ripple x={OPEN_X} y={y} r={7.35} color={color} />}
+              <circle
+                cx={OPEN_X}
+                cy={y}
+                r={7.35}
+                fill={glow ? color : 'none'}
+                stroke={s.root ? colors.accent : colors.iconRing}
+                strokeWidth={2}
+                style={styles.marker}
+              />
+            </g>
           );
         }
         const x = cellMidX(s.fret);
         return (
-          <g key={i} style={glow ? styles.markerGlow : undefined}>
-            <circle cx={x} cy={y} r={12} fill={color} style={styles.marker} />
+          <g key={i}>
+            {glow && <Ripple x={x} y={y} r={12} color={color} />}
+            <circle cx={x} cy={y} r={12} fill={color} style={{ ...styles.marker, ...(glow ? styles.markerGlow : null) }} />
             {s.finger && (
               <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fill={colors.onMarker} style={styles.fingerText}>
                 {s.finger}
@@ -628,7 +699,7 @@ const styles = {
     background: `linear-gradient(90deg, rgba(30,28,54,0) 0%, ${colors.fade} 73%)`,
     pointerEvents: 'none',
   },
-  stringLine: { transition: 'stroke 120ms, stroke-width 120ms' },
+  stringLit: { filter: `drop-shadow(0 0 3px ${colors.accent})` },
   marker: { transition: 'fill 120ms' },
   markerGlow: { filter: `drop-shadow(0 0 6px ${colors.accent})` },
   fingerText: { fontSize: 12, fontWeight: 700, fontFamily: font },
