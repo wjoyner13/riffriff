@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CHORDS } from './src/chords.js';
-import { useGuitar } from './src/guitarSynth.js';
+import { DEFAULT_VOICE, VOICES, useGuitar } from './src/guitarSynth.js';
 
 // Colors from the Figma game layout (App playground, node 39:187) and its
 // fretboard (node 26:138), which build on RIFF/GOD's own palette.
@@ -317,12 +317,54 @@ function AnswerChips({ total, answered }) {
   );
 }
 
-function CloseIcon() {
+// Mixer-style sliders, the usual "adjust sound" glyph.
+function TuneIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-      <line x1="6" y1="6" x2="18" y2="18" />
-      <line x1="18" y1="6" x2="6" y2="18" />
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="12" x2="20" y2="12" />
+      <line x1="4" y1="18" x2="20" y2="18" />
+      <circle cx="9" cy="6" r="2.2" fill="currentColor" />
+      <circle cx="15" cy="12" r="2.2" fill="currentColor" />
+      <circle cx="7" cy="18" r="2.2" fill="currentColor" />
     </svg>
+  );
+}
+
+function SoundMenu({ voice, onPick, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <>
+      <div style={styles.menuScrim} onClick={onClose} aria-hidden="true" />
+      <div style={styles.soundMenu} role="radiogroup" aria-label="Guitar sound">
+        <p style={styles.menuTitle}>Guitar sound</p>
+        {VOICES.map((v) => {
+          const on = v.id === voice;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onPick(v.id)}
+              style={{ ...styles.menuItem, background: on ? 'rgba(127,222,255,0.14)' : 'transparent' }}
+            >
+              <span style={{ ...styles.menuRadio, borderColor: on ? colors.accent : colors.muted }}>
+                {on && <span style={styles.menuRadioDot} />}
+              </span>
+              <span style={styles.menuText}>
+                <span style={styles.menuName}>{v.name}</span>
+                <span style={styles.menuDetail}>{v.detail}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -405,8 +447,20 @@ function RotatePrompt({ onClose }) {
   );
 }
 
+const VOICE_KEY = 'name-that-chord:voice';
+function savedVoice() {
+  try {
+    const v = localStorage.getItem(VOICE_KEY);
+    return VOICES.some((x) => x.id === v) ? v : DEFAULT_VOICE;
+  } catch {
+    return DEFAULT_VOICE;
+  }
+}
+
 export default function LearnApp() {
-  const playChord = useGuitar();
+  const [voice, setVoice] = useState(savedVoice);
+  const playChord = useGuitar(voice);
+  const [soundMenuOpen, setSoundMenuOpen] = useState(false);
   const portrait = usePortrait();
   // intro | practice | countdown | playing | done
   const [phase, setPhase] = useState('intro');
@@ -500,6 +554,19 @@ export default function LearnApp() {
     })();
   };
 
+  const pickVoice = (id) => {
+    setVoice(id);
+    try {
+      localStorage.setItem(VOICE_KEY, id);
+    } catch {
+      // Private mode: the choice just lasts for this visit.
+    }
+    // Let you hear the new sound, unless a riff is playing or you're answering.
+    if (phase !== 'playing' && phase !== 'countdown') {
+      setTimeout(() => strum(CHORDS.findIndex((c) => c.id === 'g')), 0);
+    }
+  };
+
   const backToStart = () => {
     stopGame();
     setCheatSheetOpen(false);
@@ -576,23 +643,42 @@ export default function LearnApp() {
   return (
     <div style={styles.gamePage}>
       <header style={styles.topBar}>
-        <button type="button" style={styles.closeButton} onClick={backToStart} aria-label="Back to the start">
-          <CloseIcon />
+        <button type="button" style={styles.newGameButton} onClick={startGame}>
+          New game
         </button>
         <div style={styles.instructionWrap}>
-          <p style={{ ...styles.instruction, color: status === 'wrong' && phase === 'playing' ? colors.wrong : colors.text }}>
-            {instruction}
-          </p>
-          {phase === 'practice' && (
-            <button type="button" style={styles.startPill} onClick={startGame}>
-              Start
-            </button>
+          <div style={styles.instructionLine}>
+            <p style={{ ...styles.instruction, color: status === 'wrong' && phase === 'playing' ? colors.wrong : colors.text }}>
+              {instruction}
+            </p>
+            {phase === 'practice' && (
+              <button type="button" style={styles.startPill} onClick={startGame}>
+                Start
+              </button>
+            )}
+          </div>
+          {/* The chips sit on their own line so the instruction never shifts as they fill. */}
+          {phase === 'playing' && round > 1 ? (
+            <AnswerChips total={round} answered={answered} />
+          ) : (
+            <span style={styles.chipRowSpacer} aria-hidden="true" />
           )}
-          {phase === 'playing' && round > 1 && <AnswerChips total={round} answered={answered} />}
         </div>
-        <button type="button" style={styles.helpButton} onClick={() => setCheatSheetOpen(true)} aria-label="Chord cheat sheet">
-          <HelpIcon />
-        </button>
+        <div style={styles.topActions}>
+          <button
+            type="button"
+            style={styles.iconButton}
+            onClick={() => setSoundMenuOpen((o) => !o)}
+            aria-label="Guitar sound"
+            aria-expanded={soundMenuOpen}
+            aria-haspopup="true"
+          >
+            <TuneIcon />
+          </button>
+          <button type="button" style={styles.iconButton} onClick={() => setCheatSheetOpen(true)} aria-label="Chord cheat sheet">
+            <HelpIcon />
+          </button>
+        </div>
       </header>
 
       <div style={styles.boardRow}>
@@ -603,6 +689,14 @@ export default function LearnApp() {
         <style>{PAD_CSS}</style>
         <ChordPads flash={flash} disabled={padsDisabled} answered={phase === 'playing' ? answered : []} onPick={onPad} />
       </div>
+
+      {soundMenuOpen && (
+        <SoundMenu
+          voice={voice}
+          onPick={pickVoice}
+          onClose={() => setSoundMenuOpen(false)}
+        />
+      )}
 
       {phase === 'done' && (
         <div style={styles.modalBackdrop}>
@@ -671,21 +765,22 @@ const styles = {
     gap: 12,
     padding: '0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left))',
   },
-  closeButton: {
-    width: 28,
-    height: 28,
+  newGameButton: {
     flex: 'none',
-    borderRadius: '50%',
+    height: 28,
+    padding: '0 12px',
+    borderRadius: 999,
     border: `1px solid ${colors.iconRing}`,
     background: 'none',
     color: colors.iconRing,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    fontFamily: font,
+    fontSize: 12,
+    fontWeight: 600,
     cursor: 'pointer',
-    padding: 0,
+    whiteSpace: 'nowrap',
   },
-  helpButton: {
+  topActions: { flex: 'none', display: 'flex', alignItems: 'center', gap: 4 },
+  iconButton: {
     width: 32,
     height: 32,
     flex: 'none',
@@ -698,7 +793,8 @@ const styles = {
     cursor: 'pointer',
     padding: 0,
   },
-  instructionWrap: { flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  instructionWrap: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  instructionLine: { maxWidth: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 },
   instruction: { margin: 0, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   startPill: {
     flex: 'none',
@@ -711,24 +807,26 @@ const styles = {
     background: colors.accent,
     cursor: 'pointer',
   },
-  progressRow: { display: 'inline-flex', gap: 5, flex: 'none' },
+  progressRow: { display: 'flex', gap: 3, flex: 'none' },
+  chipRowSpacer: { height: 13 },
   chip: {
-    minWidth: 30,
-    height: 22,
-    padding: '0 6px',
-    borderRadius: 6,
+    minWidth: 20,
+    height: 13,
+    padding: '0 4px',
+    borderRadius: 4,
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 12,
+    fontSize: 9,
     fontWeight: 700,
+    lineHeight: 1,
     boxSizing: 'border-box',
   },
   chipEmpty: {
-    width: 30,
-    height: 22,
-    borderRadius: 6,
-    border: `1.5px dashed ${colors.muted}`,
+    width: 20,
+    height: 13,
+    borderRadius: 4,
+    border: `1px dashed ${colors.muted}`,
     boxSizing: 'border-box',
     opacity: 0.7,
   },
@@ -784,6 +882,52 @@ const styles = {
     justifyContent: 'center',
     boxShadow: '0 0 0 2px #FFFFFF',
   },
+
+  menuScrim: { position: 'absolute', inset: 0, zIndex: 20 },
+  soundMenu: {
+    position: 'absolute',
+    top: 'calc(min(11dvh, 48px) + 2px)',
+    right: 'max(12px, env(safe-area-inset-right))',
+    zIndex: 21,
+    width: 240,
+    maxHeight: 'calc(100dvh - 64px)',
+    overflowY: 'auto',
+    padding: 6,
+    borderRadius: 12,
+    background: colors.surface,
+    border: `1px solid ${colors.border}`,
+    boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
+    fontFamily: font,
+  },
+  menuTitle: { margin: '6px 10px 4px', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: colors.muted },
+  menuItem: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '7px 10px',
+    border: 'none',
+    borderRadius: 8,
+    color: colors.text,
+    textAlign: 'left',
+    cursor: 'pointer',
+    fontFamily: font,
+  },
+  menuRadio: {
+    width: 16,
+    height: 16,
+    flex: 'none',
+    borderRadius: '50%',
+    border: '2px solid',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxSizing: 'border-box',
+  },
+  menuRadioDot: { width: 6, height: 6, borderRadius: '50%', background: colors.accent },
+  menuText: { display: 'flex', flexDirection: 'column', minWidth: 0 },
+  menuName: { fontSize: 14, fontWeight: 600 },
+  menuDetail: { fontSize: 11, color: colors.muted },
 
   modalBackdrop: {
     position: 'absolute',
