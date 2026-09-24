@@ -6,7 +6,6 @@ import { DEFAULT_VOICE, VOICES, useGuitar } from './src/guitarSynth.js';
 // fretboard (node 26:138), which build on RIFF/GOD's own palette.
 const colors = {
   bgLeft: '#1C1C2C', // rgb(28,28,44)
-  bgRight: '#2E2039', // rgb(46,32,57)
   band: 'rgba(18,18,28,0.66)', // #12121c at 66%
   bandBorder: '#242438',
   text: '#FFFFFF',
@@ -698,11 +697,12 @@ export default function LearnApp() {
               </button>
             )}
           </div>
-          {/* The chips sit on their own line so the instruction never shifts as they fill. */}
-          {phase === 'playing' && round > 1 ? (
-            <AnswerChips total={round} answered={answered} />
-          ) : (
-            <span style={styles.chipRowSpacer} aria-hidden="true" />
+          {/* The chips hang below the instruction, out of the flow, so neither
+              the text nor the buttons beside it move as they appear and fill. */}
+          {phase === 'playing' && round > 1 && (
+            <div style={styles.chipRow}>
+              <AnswerChips total={round} answered={answered} />
+            </div>
           )}
         </div>
         <div style={styles.topActions}>
@@ -762,10 +762,12 @@ export default function LearnApp() {
 }
 
 const BOARD_MASK = 'linear-gradient(90deg, #000 80%, transparent 98%)';
-const BOARD_GAP = 'clamp(12px, 5dvh, 28px)';
+const BOARD_GAP = 'clamp(14px, 6dvh, 32px)';
+const TOP_BAR_H = 'calc(max(56px, 17dvh) + env(safe-area-inset-top))';
 const font = "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif";
-// The design's background: purple on the right, deep navy on the left.
-const pageBackground = `linear-gradient(-89.45deg, ${colors.bgRight} 5.93%, ${colors.bgLeft} 71.75%)`;
+// One flat background, the design's left-side color, so the fretboard's
+// right-edge fade blends into the same color it started on.
+const pageBackground = colors.bgLeft;
 
 const styles = {
   page: {
@@ -788,12 +790,13 @@ const styles = {
   fullscreenHint: { margin: '18px 0 0', fontSize: 12, color: colors.muted, lineHeight: 1.5 },
   rotateIcon: { fontSize: 44 },
 
-  // Landscape game screen, laid out on the design's 327px-tall grid:
-  // a 36px top bar, a 190px board, and a 92px pad band.
+  // Landscape game screen: a top bar with room above it, the board, and the
+  // pad band. The top row is taller than the design's 36px so the controls
+  // aren't pressed against the top edge of a sideways phone.
   gamePage: {
     height: '100dvh',
     display: 'grid',
-    gridTemplateRows: 'minmax(40px, 11dvh) 1fr minmax(84px, 28dvh)',
+    gridTemplateRows: `${TOP_BAR_H} 1fr minmax(84px, 28dvh)`,
     background: pageBackground,
     color: colors.text,
     fontFamily: font,
@@ -805,7 +808,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    padding: '0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left))',
+    padding: 'max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left))',
   },
   newGameButton: {
     flex: 'none',
@@ -835,7 +838,7 @@ const styles = {
     cursor: 'pointer',
     padding: 0,
   },
-  instructionWrap: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  instructionWrap: { flex: 1, minWidth: 0, position: 'relative', display: 'flex', justifyContent: 'center' },
   instructionLine: { maxWidth: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 },
   instruction: { margin: 0, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   startPill: {
@@ -850,7 +853,7 @@ const styles = {
     cursor: 'pointer',
   },
   progressRow: { display: 'flex', gap: 3, flex: 'none' },
-  chipRowSpacer: { height: 13 },
+  chipRow: { position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, display: 'flex', justifyContent: 'center' },
   chip: {
     minWidth: 20,
     height: 13,
@@ -928,7 +931,7 @@ const styles = {
   menuScrim: { position: 'absolute', inset: 0, zIndex: 20 },
   soundMenu: {
     position: 'absolute',
-    top: 'calc(min(11dvh, 48px) + 2px)',
+    top: `calc(${TOP_BAR_H} - 4px)`,
     right: 'max(12px, env(safe-area-inset-right))',
     zIndex: 21,
     width: 240,
