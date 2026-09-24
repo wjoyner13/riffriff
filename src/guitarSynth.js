@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { getAudioContext, useAudioUnlock } from './audio.js';
 
 // Synthesizes plucked-guitar-string audio with Karplus-Strong physical
 // modeling — no recordings or network fetches, just noise fed through a
@@ -93,24 +94,17 @@ function buildChain(audio, kind) {
   return input;
 }
 
-// The AudioContext must be created (or resumed) inside a user gesture, or
-// iOS Safari keeps it silent — so it's built lazily on first use, and both
-// it and the caches live in refs so they survive re-renders.
 export function useGuitar(voiceId = DEFAULT_VOICE) {
-  const ctxRef = useRef(null);
   const buffersRef = useRef(new Map()); // `${voice}:${freq}` -> AudioBuffer, built once and reused
   const chainsRef = useRef(new Map()); // chain kind -> input node
   const voiceRef = useRef(voiceId);
   voiceRef.current = voiceId;
+  useAudioUnlock();
 
   return useCallback((chord, onString) => {
-    if (!ctxRef.current) {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      ctxRef.current = new Ctx();
-    }
-    const audio = ctxRef.current;
-    if (audio.state === 'suspended') audio.resume();
+    const audio = getAudioContext();
+    if (!audio) return;
+    if (audio.state === 'suspended') audio.resume().catch(() => {});
     const voice = voiceById(voiceRef.current);
 
     const bufferFor = (freq) => {
